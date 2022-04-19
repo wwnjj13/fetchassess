@@ -33,77 +33,78 @@ public class FetchControllerV1 {
     public ResponseEntity<?> doTransactionPost(HttpServletResponse response,
                                                HttpServletRequest request)
             throws ServletException, IOException {
+        int responseCode = -1;
+        StringBuilder bodyBuilder = new StringBuilder();
 
-        try {
-            ServletInputStream stream = request.getInputStream();
-
-            ByteArrayOutputStream result = new ByteArrayOutputStream();
-            byte[] buffer = new byte[1024];
-            for (int length; (length = stream.read(buffer)) != -1; ) {
-                result.write(buffer, 0, length);
-            }
-
-            String payload = result.toString("UTF-8");
-
-            Object obj = new JSONParser().parse(payload);
-
-            JSONObject jo = (JSONObject) obj;
-
-            int responseCode = -1;
-            StringBuilder bodyBuilder = new StringBuilder();
-
-            String payer = (String) jo.getOrDefault("payer", null);
-            if (payer == null) {
-                responseCode = HttpStatus.BAD_REQUEST.value();
-                bodyBuilder.append("payer missing.").append("\n");
-            }
-
-            Integer points = null;
-            Object pointsString = jo.getOrDefault("points", null);
-            if (pointsString == null) {
-                responseCode = HttpStatus.BAD_REQUEST.value();
-                bodyBuilder.append("points missing.").append("\n");
-            } else {
-                try {
-                    points = Integer.valueOf(((Long) pointsString).intValue());
-                } catch (ClassCastException | NumberFormatException e) {
-                    log.info("cannot parse points: " + pointsString);
-                    responseCode = HttpStatus.BAD_REQUEST.value();
-                    bodyBuilder.append("Cannot parse points as Integer").append("\n");
-                }
-            }
-
-            Date timestamp = null;
-            Object timestampString = jo.getOrDefault("timestamp", null);
-            if (timestampString == null) {
-                responseCode = HttpStatus.BAD_REQUEST.value();
-                bodyBuilder.append("timestamp").append("\n");
-            } else {
-                try {
-                    Instant timestampInstant = Instant.parse((String) timestampString);
-                    timestamp = Date.from(timestampInstant);
-                    //LoggerFactory.getLogger(this.getClass()).info(timestampInstant.toString());
-                } catch (ClassCastException e) {
-                    log.info("cannot parse timestamp: " + timestampString);
-                    responseCode = HttpStatus.BAD_REQUEST.value();
-                    bodyBuilder.append("Cannot parse timestamp as Date").append("\n");
-                }
-            }
-
-            if (responseCode > -1) {
-                return ResponseEntity.status(HttpStatus.valueOf(responseCode)).body(bodyBuilder.toString());
-            }
-
-            Transaction newTransaction = new Transaction(payer, timestamp, points);
-
-            newTransaction.setPayer(payer);
-            newTransaction.setPoints(points);
-            newTransaction.setTimestamp(timestamp);
-
-            TRANSACTIONS.add(newTransaction);
-        } catch (ParseException e) {
-            log.error("Error", e);
+        // Read the payload
+        ServletInputStream stream = request.getInputStream();
+        ByteArrayOutputStream result = new ByteArrayOutputStream();
+        byte[] buffer = new byte[1024];
+        for (int length; (length = stream.read(buffer)) != -1; ) {
+            result.write(buffer, 0, length);
         }
+        String payload = result.toString("UTF-8");
+
+        // Create JSON Object
+        Object obj;
+        JSONObject jo = null;
+        try {
+            obj = new JSONParser().parse(payload);
+            jo = (JSONObject) obj;
+        } catch (ParseException e) {
+            responseCode = HttpStatus.BAD_REQUEST.value();
+            bodyBuilder.append("cannot parse payload to JSON Object.").append("\n");
+        }
+
+        // Read Payer value
+        String payer = (String) jo.getOrDefault("payer", null);
+        if (payer == null) {
+            responseCode = HttpStatus.BAD_REQUEST.value();
+            bodyBuilder.append("payer missing.").append("\n");
+        }
+
+        // Read points value
+        Integer points = null;
+        Object pointsString = jo.getOrDefault("points", null);
+        if (pointsString == null) {
+            responseCode = HttpStatus.BAD_REQUEST.value();
+            bodyBuilder.append("points missing.").append("\n");
+        } else {
+            try {
+                points = Integer.valueOf(((Long) pointsString).intValue());
+            } catch (ClassCastException | NumberFormatException e) {
+                log.info("cannot parse points: " + pointsString);
+                responseCode = HttpStatus.BAD_REQUEST.value();
+                bodyBuilder.append("Cannot parse points as Integer").append("\n");
+            }
+        }
+
+        // Read timestamp
+        Date timestamp = null;
+        Object timestampString = jo.getOrDefault("timestamp", null);
+        if (timestampString == null) {
+            responseCode = HttpStatus.BAD_REQUEST.value();
+            bodyBuilder.append("timestamp").append("\n");
+        } else {
+            try {
+                Instant timestampInstant = Instant.parse((String) timestampString);
+                timestamp = Date.from(timestampInstant);
+                //LoggerFactory.getLogger(this.getClass()).info(timestampInstant.toString());
+            } catch (ClassCastException e) {
+                log.info("cannot parse timestamp: " + timestampString);
+                responseCode = HttpStatus.BAD_REQUEST.value();
+                bodyBuilder.append("Cannot parse timestamp as Date").append("\n");
+            }
+        }
+
+        // We failed. Send error
+        if (responseCode > -1) {
+            return ResponseEntity.status(HttpStatus.valueOf(responseCode)).body(bodyBuilder.toString());
+        }
+
+        // Create and add new Transaction
+        Transaction newTransaction = new Transaction(payer, timestamp, points);
+        TRANSACTIONS.add(newTransaction);
 
         return ResponseEntity.status(HttpStatus.OK).body("We good");
     }
@@ -113,114 +114,110 @@ public class FetchControllerV1 {
                             HttpServletRequest request)
             throws IOException {
 
-        log.info("\n\nspend");
-
-        response.reset();
         response.setContentType("application/json");
-        try (PrintWriter printWriter = response.getWriter()) {
+        int responseCode = -1;
+        StringBuilder bodyBuilder = new StringBuilder();
 
-            ServletInputStream stream = request.getInputStream();
+        // Read the payload
+        ServletInputStream stream = request.getInputStream();
+        ByteArrayOutputStream result = new ByteArrayOutputStream();
+        byte[] buffer = new byte[1024];
+        for (int length; (length = stream.read(buffer)) != -1; ) {
+            result.write(buffer, 0, length);
+        }
+        String payload = result.toString("UTF-8");
 
-            ByteArrayOutputStream result = new ByteArrayOutputStream();
-            byte[] buffer = new byte[1024];
-            for (int length; (length = stream.read(buffer)) != -1; ) {
-                result.write(buffer, 0, length);
-            }
-
-            String payload = result.toString("UTF-8");
-
-            // parsing file "JSONExample.json"
-            Object obj = new JSONParser().parse(payload);
-
-            // typecasting obj to JSONObject
-            JSONObject jo = (JSONObject) obj;
-
-            int responseCode = -1;
-            StringBuilder bodyBuilder = new StringBuilder();
-
-            Integer points = null;
-            Object pointsString = jo.getOrDefault("points", null);
-            if (pointsString == null) {
-                responseCode = HttpStatus.BAD_REQUEST.value();
-                bodyBuilder.append("points missing.").append("\n");
-            } else {
-                try {
-                    points = Integer.valueOf(((Long) pointsString).intValue());
-                } catch (ClassCastException | NumberFormatException e) {
-                    log.info("cannot parse points: " + pointsString);
-                    responseCode = HttpStatus.BAD_REQUEST.value();
-                    bodyBuilder.append("Cannot parse points as Integer").append("\n");
-                }
-            }
-
-            if (responseCode > -1) {
-                response.sendError(responseCode, bodyBuilder.toString());
-            } else {
-
-                if (points > getCurrentTotalPoints()) {
-                    JSONObject newObject = new JSONObject();
-                    newObject.put("error", "insufficient points");
-                    printWriter.write(newObject.toString());
-                } else {
-                    List<Transaction> copyTransactions = TRANSACTIONS
-                            .stream()
-                            .sorted(Comparator.comparing(Transaction::getTimestamp))
-                            .collect(Collectors.toList());
-
-                    Map<String,Integer> currentBalances = getCurrentBalances();
-
-                    Integer remainingToDeduct = points;
-                    Map<String, Integer> deductedPoints = new HashMap<>();
-                    List<Transaction> newTransactions = new ArrayList<>();
-                    for (Transaction transaction : copyTransactions) {
-                        log.info(transaction.toString());
-                        String payer = transaction.getPayer();
-                        if (!deductedPoints.containsKey(payer)) {
-                            deductedPoints.put(payer, 0);
-                        }
-
-                        Integer toDeduct = remainingToDeduct;
-                        if (transaction.getPoints() < remainingToDeduct) {
-                            toDeduct = transaction.getPoints();
-                        }
-
-                        log.info("toDeduct: " + toDeduct);
-
-                        deductedPoints.put(payer, deductedPoints.get(payer) - toDeduct);
-//                        if ((deductedPoints.get(payer) - toDeduct) * -1 > getCurrentBalances().get(payer)) {
-//                            continue;
-//                        }
-                        remainingToDeduct -= toDeduct;
-                        log.info("remainingToDeduct: " + remainingToDeduct);
-
-                        Transaction newTransaction = new Transaction(payer, transaction.timestamp, toDeduct * -1);
-                        newTransactions.add(newTransaction);
-
-                        if (remainingToDeduct == 0) {
-                            break;
-                        }
-                    }
-
-
-                    TRANSACTIONS.addAll(newTransactions);
-                    JSONArray newArray = new JSONArray();
-                    deductedPoints.forEach((e, f) -> {
-                        JSONObject newObject = new JSONObject();
-                        newObject.put("payer", e);
-                        newObject.put("points", f);
-                        newArray.put(newObject);
-                    });
-                    printWriter.write(newArray.toString());
-                }
-            }
-
+        // Create JSON Object
+        Object obj;
+        JSONObject jo = null;
+        try {
+            obj = new JSONParser().parse(payload);
+            jo = (JSONObject) obj;
         } catch (ParseException e) {
-            log.error("Error", e);
+            responseCode = HttpStatus.BAD_REQUEST.value();
+            bodyBuilder.append("cannot parse payload to JSON Object.").append("\n");
         }
 
-        log.info("end spend\n\n");
+        // Read points value
+        Integer points = null;
+        Object pointsString = jo.getOrDefault("points", null);
+        if (pointsString == null) {
+            responseCode = HttpStatus.BAD_REQUEST.value();
+            bodyBuilder.append("points missing.").append("\n");
+        } else {
+            try {
+                points = Integer.valueOf(((Long) pointsString).intValue());
+            } catch (ClassCastException | NumberFormatException e) {
+                log.info("cannot parse points: " + pointsString);
+                responseCode = HttpStatus.BAD_REQUEST.value();
+                bodyBuilder.append("Cannot parse points as Integer").append("\n");
+            }
+        }
+
+        // something went wrong
+        if (responseCode > -1) {
+            response.sendError(responseCode, bodyBuilder.toString());
+            return;
+        }
+
+        PrintWriter printWriter = response.getWriter();
+
+        if (points > getCurrentTotalPoints()) {
+            JSONObject newObject = new JSONObject();
+            newObject.put("error", "insufficient points");
+            printWriter.write(newObject.toString());
+            return;
+        }
+
+        //get a sorted copy of the transactions
+        List<Transaction> copyTransactions = TRANSACTIONS
+                .stream()
+                .sorted(Comparator.comparing(Transaction::getTimestamp))
+                .collect(Collectors.toList());
+
+        // As we loop, keep remainingToDeduct, deductedPoints, and newTransactions
+        Integer remainingToDeduct = points;
+        Map<String, Integer> deductedPoints = new HashMap<>();
+        List<Transaction> newTransactions = new ArrayList<>();
+        for (Transaction transaction : copyTransactions) {
+            String payer = transaction.getPayer();
+
+            // Ensure current payer is in the deducted points map
+            if (!deductedPoints.containsKey(payer)) {
+                deductedPoints.put(payer, 0);
+            }
+
+            Integer toDeduct = remainingToDeduct;
+            if (transaction.getPoints() < remainingToDeduct) {
+                toDeduct = transaction.getPoints();
+            }
+
+            // Update deductedPoints
+            deductedPoints.put(payer, deductedPoints.get(payer) - toDeduct);
+            remainingToDeduct -= toDeduct;
+
+            // Create a new transaction with a negative point value. This shows that these points have been spent.
+            Transaction newTransaction = new Transaction(payer, transaction.timestamp, toDeduct * -1);
+            newTransactions.add(newTransaction);
+
+            if (remainingToDeduct == 0) {
+                break;
+            }
+        }
+
+        // Add all the new transactions to the transaction list.
+        TRANSACTIONS.addAll(newTransactions);
+        JSONArray newArray = new JSONArray();
+        deductedPoints.forEach((e, f) -> {
+            JSONObject newObject = new JSONObject();
+            newObject.put("payer", e);
+            newObject.put("points", f);
+            newArray.put(newObject);
+        });
+        printWriter.write(newArray.toString());
     }
 
+    // Created for easy testing. Certainly not production-safe for this to be publicly exposed
     @PostMapping(path = "/cleartransactions")
     public void doClearPost(HttpServletResponse response,
                             HttpServletRequest request)
@@ -228,6 +225,7 @@ public class FetchControllerV1 {
         TRANSACTIONS.clear();
     }
 
+    // Construct a JOSNArray object of the balance map.
     @GetMapping(path = "/balances")
     public void doBalancesGet(HttpServletResponse response,
                               HttpServletRequest request)
@@ -247,6 +245,7 @@ public class FetchControllerV1 {
         response.getWriter().write(newArray.toString());
     }
 
+    // Reusable code to get current balance for each payer
     private Map<String, Integer> getCurrentBalances() {
         Map<String, Integer> output = new HashMap<>();
 
@@ -259,6 +258,7 @@ public class FetchControllerV1 {
         return output;
     }
 
+    // Sum total points available to the user. In reality, this would likely be another column in the User table
     private Integer getCurrentTotalPoints() {
         return TRANSACTIONS.stream().mapToInt(Transaction::getPoints).sum();
     }
