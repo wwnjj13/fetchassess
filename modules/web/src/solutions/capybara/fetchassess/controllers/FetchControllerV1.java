@@ -113,6 +113,8 @@ public class FetchControllerV1 {
                             HttpServletRequest request)
             throws IOException {
 
+        log.info("\n\nspend");
+
         response.reset();
         response.setContentType("application/json");
         try (PrintWriter printWriter = response.getWriter()) {
@@ -155,40 +157,51 @@ public class FetchControllerV1 {
                 response.sendError(responseCode, bodyBuilder.toString());
             } else {
 
-                List<Transaction> copyTransactions = TRANSACTIONS
-                        .stream()
-                        .sorted(Comparator.comparing(Transaction::getTimestamp))
-                        .collect(Collectors.toList());
-
-                Integer remainingToDeduct = points;
-                Map<String, Integer> deductedPoints = new HashMap<>();
-                List<Transaction> newTransactions = new ArrayList<>();
-                for (Transaction transaction : copyTransactions) {
-                    String payer = transaction.getPayer();
-                    if (!deductedPoints.containsKey(payer)) {
-                        deductedPoints.put(payer, 0);
-                    }
-
-                    Integer toDeduct = remainingToDeduct;
-                    if (transaction.getPoints() < remainingToDeduct) {
-                        toDeduct = transaction.getPoints();
-                    }
-
-                    deductedPoints.put(payer, deductedPoints.get(payer) - toDeduct);
-                    remainingToDeduct -= toDeduct;
-
-                    Transaction newTransaction = new Transaction(payer, new Date(), toDeduct * -1);
-                    newTransactions.add(newTransaction);
-
-                    if (remainingToDeduct == 0) {
-                        break;
-                    }
-                }
-                if (remainingToDeduct > 0) {
+                if (points > getCurrentTotalPoints()) {
                     JSONObject newObject = new JSONObject();
                     newObject.put("error", "insufficient points");
                     printWriter.write(newObject.toString());
                 } else {
+                    List<Transaction> copyTransactions = TRANSACTIONS
+                            .stream()
+                            .sorted(Comparator.comparing(Transaction::getTimestamp))
+                            .collect(Collectors.toList());
+
+                    Map<String,Integer> currentBalances = getCurrentBalances();
+
+                    Integer remainingToDeduct = points;
+                    Map<String, Integer> deductedPoints = new HashMap<>();
+                    List<Transaction> newTransactions = new ArrayList<>();
+                    for (Transaction transaction : copyTransactions) {
+                        log.info(transaction.toString());
+                        String payer = transaction.getPayer();
+                        if (!deductedPoints.containsKey(payer)) {
+                            deductedPoints.put(payer, 0);
+                        }
+
+                        Integer toDeduct = remainingToDeduct;
+                        if (transaction.getPoints() < remainingToDeduct) {
+                            toDeduct = transaction.getPoints();
+                        }
+
+                        log.info("toDeduct: " + toDeduct);
+
+                        deductedPoints.put(payer, deductedPoints.get(payer) - toDeduct);
+//                        if ((deductedPoints.get(payer) - toDeduct) * -1 > getCurrentBalances().get(payer)) {
+//                            continue;
+//                        }
+                        remainingToDeduct -= toDeduct;
+                        log.info("remainingToDeduct: " + remainingToDeduct);
+
+                        Transaction newTransaction = new Transaction(payer, transaction.timestamp, toDeduct * -1);
+                        newTransactions.add(newTransaction);
+
+                        if (remainingToDeduct == 0) {
+                            break;
+                        }
+                    }
+
+
                     TRANSACTIONS.addAll(newTransactions);
                     JSONArray newArray = new JSONArray();
                     deductedPoints.forEach((e, f) -> {
@@ -204,6 +217,8 @@ public class FetchControllerV1 {
         } catch (ParseException e) {
             log.error("Error", e);
         }
+
+        log.info("end spend\n\n");
     }
 
     @PostMapping(path = "/cleartransactions")
@@ -222,16 +237,30 @@ public class FetchControllerV1 {
 
         JSONArray newArray = new JSONArray();
 
+        getCurrentBalances().forEach((k, v) -> {
+            JSONObject newObject = new JSONObject();
+            newObject.put("payer", k);
+            newObject.put("points", v);
+            newArray.put(newObject);
+        });
+
+        response.getWriter().write(newArray.toString());
+    }
+
+    private Map<String, Integer> getCurrentBalances() {
+        Map<String, Integer> output = new HashMap<>();
+
         TRANSACTIONS.stream()
                 .collect(Collectors.groupingBy(Transaction::getPayer, Collectors.summingInt(Transaction::getPoints)))
                 .forEach((payer, count) -> {
-                    JSONObject newObject = new JSONObject();
-                    newObject.put("payer", payer);
-                    newObject.put("points", count);
-                    newArray.put(newObject);
+                    output.put(payer, count);
                 });
 
-        response.getWriter().write(newArray.toString());
+        return output;
+    }
+
+    private Integer getCurrentTotalPoints() {
+        return TRANSACTIONS.stream().mapToInt(Transaction::getPoints).sum();
     }
 
     private static class Transaction {

@@ -8,8 +8,10 @@ curl -H "Content-Type: application/json" -d "{""payer"":""DANNON"",""points"":30
 curl -H "Content-Type: application/json"  -X GET http://localhost:8080/fetch/dispatch/fetch/v1/balances
 curl -H "Content-Type: application/json" -d "{""points"":50000}" -X POST http://localhost:8080/fetch/dispatch/fetch/v1/spend
 curl -H "Content-Type: application/json"  -X GET http://localhost:8080/fetch/dispatch/fetch/v1/balances
-curl -H "Content-Type: application/json" -d "{""points"":5000}" -X POST http://localhost:8080/fetch/dispatch/fetch/v1/spend
+curl -H "Content-Type: application/json" -d "{""points"":11301}" -X POST http://localhost:8080/fetch/dispatch/fetch/v1/spend
 curl -H "Content-Type: application/json"  -X GET http://localhost:8080/fetch/dispatch/fetch/v1/balances
-curl -H "Content-Type: application/json" -d "{""points"":7000}" -X POST http://localhost:8080/fetch/dispatch/fetch/v1/spend
+curl -H "Content-Type: application/json" -d "{""points"":11299}" -X POST http://localhost:8080/fetch/dispatch/fetch/v1/spend
+curl -H "Content-Type: application/json"  -X GET http://localhost:8080/fetch/dispatch/fetch/v1/balances
+curl -H "Content-Type: application/json" -d "{""points"":5000}" -X POST http://localhost:8080/fetch/dispatch/fetch/v1/spend
 curl -H "Content-Type: application/json"  -X GET http://localhost:8080/fetch/dispatch/fetch/v1/balances
 curl -H "Content-Type: application/json"  -X POST http://localhost:8080/fetch/dispatch/fetch/v1/cleartransactions
